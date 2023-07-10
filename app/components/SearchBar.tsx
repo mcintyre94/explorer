@@ -242,7 +242,7 @@ async function buildDomainOptions(connection: Connection, search: string, option
 }
 
 // builds local search options
-function buildOptions(rawSearch: string, cluster: Cluster, tokenRegistry: TokenInfoMap, currentEpoch?: number) {
+function buildOptions(rawSearch: string, cluster: Cluster, tokenRegistry: TokenInfoMap, currentEpoch?: bigint) {
     const search = rawSearch.trim();
     if (search.length === 0) return [];
 
@@ -285,7 +285,7 @@ function buildOptions(rawSearch: string, cluster: Cluster, tokenRegistry: TokenI
             ],
         });
 
-        if (currentEpoch !== undefined && Number(search) <= currentEpoch + 1) {
+        if (currentEpoch !== undefined && Number(search) <= currentEpoch + BigInt(1)) {
             options.push({
                 label: 'Epoch',
                 options: [
