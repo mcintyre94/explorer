@@ -6,8 +6,8 @@ import { MessageBanner } from '@components/MessageBanner';
 import { Navbar } from '@components/Navbar';
 import { SearchBar } from '@components/SearchBar';
 import { ClusterProvider } from '@providers/cluster';
-import { MintsProvider } from '@providers/mints';
 import { ScrollAnchorProvider } from '@providers/scroll-anchor';
+import { TokenRegistryProvider } from '@providers/token-registry';
 import { Rubik } from 'next/font/google';
 import { Metadata } from 'next/types';
 
@@ -41,7 +41,7 @@ export default function RootLayout({
             <body>
                 <ScrollAnchorProvider>
                     <ClusterProvider>
-                        <MintsProvider>
+                        <TokenRegistryProvider>
                             <ClusterModal />
                             <div className="main-content pb-4">
                                 <Navbar />
@@ -50,7 +50,7 @@ export default function RootLayout({
                                 <SearchBar />
                                 {children}
                             </div>
-                        </MintsProvider>
+                        </TokenRegistryProvider>
                     </ClusterProvider>
                 </ScrollAnchorProvider>
                 {analytics}

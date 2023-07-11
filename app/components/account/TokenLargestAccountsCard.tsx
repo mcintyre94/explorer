@@ -5,12 +5,9 @@ import { ErrorCard } from '@components/common/ErrorCard';
 import { LoadingCard } from '@components/common/LoadingCard';
 import { useMintAccountInfo } from '@providers/accounts';
 import { FetchStatus } from '@providers/cache';
-import {
-    TokenAccountBalancePairWithOwner,
-    useFetchTokenLargestAccounts,
-    useTokenLargestTokens,
-} from '@providers/mints/largest';
-import { useTokenRegistry } from '@providers/mints/token-registry';
+import type { TokenAccountBalancePairWithOwner } from '@providers/largest-accounts';
+import { useFetchTokenLargestAccounts, useTokenLargestTokens } from '@providers/largest-accounts';
+import { useTokenRegistry } from '@providers/token-registry';
 import { PublicKey } from '@solana/web3.js';
 import { normalizeTokenAmount } from '@utils/index';
 import BigNumber from 'bignumber.js';
