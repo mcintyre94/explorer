@@ -6,22 +6,22 @@ import { LoadingCard } from '@components/common/LoadingCard';
 import { useMintAccountInfo } from '@providers/accounts';
 import { FetchStatus } from '@providers/cache';
 import {
-    TokenAccountBalancePairWithOwner,
+    TokenAccountData,
     useFetchTokenLargestAccounts,
     useTokenLargestTokens,
 } from '@providers/mints/largest';
 import { useTokenRegistry } from '@providers/mints/token-registry';
-import { PublicKey } from '@solana/web3.js';
 import { normalizeTokenAmount } from '@utils/index';
 import BigNumber from 'bignumber.js';
-import React, { useMemo } from 'react';
+import React from 'react';
+import { assertIsBase58EncodedAddress } from 'web3js-experimental';
 
 export function TokenLargestAccountsCard({ mintAddress }: { mintAddress: string }) {
-    const pubkey = useMemo(() => new PublicKey(mintAddress), [mintAddress]);
+    assertIsBase58EncodedAddress(mintAddress);
     const mintInfo = useMintAccountInfo(mintAddress);
     const largestAccounts = useTokenLargestTokens(mintAddress);
     const fetchLargestAccounts = useFetchTokenLargestAccounts();
-    const refreshLargest = React.useCallback(() => fetchLargestAccounts(pubkey), [pubkey, fetchLargestAccounts]);
+    const refreshLargest = React.useCallback(() => fetchLargestAccounts(mintAddress), [mintAddress, fetchLargestAccounts]);
     const { tokenRegistry } = useTokenRegistry();
     const unit = tokenRegistry.get(mintAddress)?.symbol;
     const unitLabel = unit ? `(${unit})` : '';
@@ -52,7 +52,7 @@ export function TokenLargestAccountsCard({ mintAddress }: { mintAddress: string 
     }
 
     // Find largest fixed point in accounts array
-    const balanceFixedPoint = accounts.reduce((prev: number, current: TokenAccountBalancePairWithOwner) => {
+    const balanceFixedPoint = accounts.reduce((prev: number, current: TokenAccountData) => {
         const amount = `${current.uiAmountString}`;
         const length = amount.length;
         const decimalIndex = amount.indexOf('.');
@@ -99,7 +99,7 @@ export function TokenLargestAccountsCard({ mintAddress }: { mintAddress: string 
 }
 
 const renderAccountRow = (
-    account: TokenAccountBalancePairWithOwner,
+    account: TokenAccountData,
     index: number,
     balanceFixedPoint: number,
     supply: number

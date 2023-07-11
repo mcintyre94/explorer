@@ -11,9 +11,10 @@ import React from 'react';
 import { useEffect, useState } from 'react';
 
 import { Copyable } from './Copyable';
+import { Base58EncodedAddress } from 'web3js-experimental';
 
 type Props = {
-    pubkey: PublicKey;
+    pubkey: PublicKey | Base58EncodedAddress;
     alignRight?: boolean;
     link?: boolean;
     raw?: boolean;
@@ -35,7 +36,7 @@ export function Address({
     useMetadata,
     overrideText,
 }: Props) {
-    const address = pubkey.toBase58();
+    const address = typeof pubkey === 'string' ? pubkey : pubkey.toBase58();
     const { tokenRegistry } = useTokenRegistry();
     const { cluster } = useCluster();
     const addressPath = useClusterPath({ pathname: `/address/${address}` });

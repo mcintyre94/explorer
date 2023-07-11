@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-redeclare */
 
-import { PublicKeyFromString } from '@validators/pubkey';
+import { PublicKeyFromString } from '@validators/pubkey'; // TODO: refactor out web3js
 import { any, array, boolean, enums, Infer, nullable, number, optional, string, type } from 'superstruct';
 
 export type TokenAccountType = Infer<typeof TokenAccountType>;

@@ -3,16 +3,19 @@
 import * as Cache from '@providers/cache';
 import { ActionType, FetchStatus } from '@providers/cache';
 import { useCluster } from '@providers/cluster';
-import { Connection, ParsedAccountData, PublicKey, TokenAccountBalancePair } from '@solana/web3.js';
 import { Cluster } from '@utils/cluster';
 import { reportError } from '@utils/sentry';
-import { TokenAccount, TokenAccountInfo } from '@validators/accounts/token';
-import { ParsedInfo } from '@validators/index';
 import React from 'react';
-import { create } from 'superstruct';
+import { Base58EncodedAddress, createDefaultRpcTransport, createSolanaRpc } from 'web3js-experimental';
+
+export type TokenAccountData = {
+    uiAmountString: string,
+    address: Base58EncodedAddress,
+    owner?: Base58EncodedAddress
+}
 
 type LargestAccounts = {
-    largest: TokenAccountBalancePairWithOwner[];
+    largest: TokenAccountData[];
 };
 
 type State = Cache.State<LargestAccounts>;
@@ -38,15 +41,9 @@ export function LargestAccountsProvider({ children }: ProviderProps) {
     );
 }
 
-type OptionalOwner = {
-    owner?: PublicKey;
-};
-
-export type TokenAccountBalancePairWithOwner = TokenAccountBalancePair & OptionalOwner;
-
-async function fetchLargestAccounts(dispatch: Dispatch, pubkey: PublicKey, cluster: Cluster, url: string) {
+async function fetchLargestAccounts(dispatch: Dispatch, pubkey: Base58EncodedAddress, cluster: Cluster, url: string) {
     dispatch({
-        key: pubkey.toBase58(),
+        key: pubkey,
         status: Cache.FetchStatus.Fetching,
         type: ActionType.Update,
         url,
@@ -55,30 +52,37 @@ async function fetchLargestAccounts(dispatch: Dispatch, pubkey: PublicKey, clust
     let data;
     let fetchStatus;
     try {
-        data = {
-            largest: (await new Connection(url, 'confirmed').getTokenLargestAccounts(pubkey)).value,
-        };
+        const transport = createDefaultRpcTransport({ url });
+        const rpc = createSolanaRpc({ transport });
 
-        data.largest = await Promise.all(
-            data.largest.map(async (account): Promise<TokenAccountBalancePairWithOwner> => {
+        const { value: largestTokenAccounts } = await rpc.getTokenLargestAccounts(pubkey, { commitment: 'confirmed' }).send();
+        const withOwners = await Promise.all(
+            largestTokenAccounts.map(async (account): Promise<TokenAccountData> => {
                 try {
-                    const accountInfo = (await new Connection(url, 'confirmed').getParsedAccountInfo(account.address))
-                        .value;
-                    if (accountInfo && 'parsed' in accountInfo.data) {
-                        const info = createParsedAccountInfo(accountInfo.data);
-                        return {
-                            ...account,
-                            owner: info.owner,
-                        };
+                    const accountInfo = await rpc.getAccountInfo(account.address, {
+                        commitment: 'confirmed',
+                        encoding: 'jsonParsed'
+                    }).send();
+                    return {
+                        uiAmountString: account.uiAmountString,
+                        address: account.address,
+                        owner: accountInfo.value?.owner
                     }
                 } catch (error) {
                     if (cluster !== Cluster.Custom) {
                         reportError(error, { url });
                     }
                 }
-                return account;
+                return {
+                    uiAmountString: account.uiAmountString,
+                    address: account.address,
+                }
             })
-        );
+        )
+
+        data = {
+            largest: withOwners
+        }
 
         fetchStatus = FetchStatus.Fetched;
     } catch (error) {
@@ -89,7 +93,7 @@ async function fetchLargestAccounts(dispatch: Dispatch, pubkey: PublicKey, clust
     }
     dispatch({
         data,
-        key: pubkey.toBase58(),
+        key: pubkey,
         status: fetchStatus,
         type: ActionType.Update,
         url,
@@ -104,7 +108,7 @@ export function useFetchTokenLargestAccounts() {
 
     const { cluster, url } = useCluster();
     return React.useCallback(
-        (pubkey: PublicKey) => {
+        (pubkey: Base58EncodedAddress) => {
             fetchLargestAccounts(dispatch, pubkey, cluster, url);
         },
         [dispatch, cluster, url]
@@ -119,10 +123,4 @@ export function useTokenLargestTokens(address: string): Cache.CacheEntry<Largest
     }
 
     return context.entries[address];
-}
-
-function createParsedAccountInfo(parsedData: ParsedAccountData): TokenAccountInfo {
-    const data = create(parsedData.parsed, ParsedInfo);
-    const parsed = create(data, TokenAccount);
-    return create(parsed.info, TokenAccountInfo);
 }
