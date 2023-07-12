@@ -3,15 +3,14 @@
 import { useCluster } from '@providers/cluster';
 import { useTokenRegistry } from '@providers/token-registry';
 import { TokenInfoMap } from '@solana/spl-token-registry';
-import { Connection } from '@solana/web3.js';
 import { Cluster } from '@utils/cluster';
-import { getDomainInfo, hasDomainSyntax } from '@utils/name-service';
-import { LOADER_IDS, LoaderName, PROGRAM_INFO_BY_ID, SPECIAL_IDS, SYSVAR_IDS } from '@utils/tx';
+import { LOADER_IDS, LoaderName, PROGRAM_INFO_BY_ID, SPECIAL_IDS, SYSVAR_IDS } from '@utils/programs';
 import bs58 from 'bs58';
 import { useRouter, useSearchParams } from 'next/navigation';
 import React, { useId } from 'react';
 import { Search } from 'react-feather';
 import Select, { ActionMeta, InputActionMeta, ValueType } from 'react-select';
+import { Base58EncodedAddress } from 'web3js-experimental';
 
 interface SearchOptions {
     label: string;
@@ -22,6 +21,10 @@ interface SearchOptions {
     }[];
 }
 
+const hasDomainSyntax = (value: string) => {
+    return value.length > 4 && value.substring(value.length - 4) === '.sol';
+};
+
 export function SearchBar() {
     const [search, setSearch] = React.useState('');
     const searchRef = React.useRef('');
@@ -31,7 +34,7 @@ export function SearchBar() {
     const selectRef = React.useRef<Select<any> | null>(null);
     const router = useRouter();
     const { tokenRegistry } = useTokenRegistry();
-    const { url, cluster, clusterInfo } = useCluster();
+    const { cluster, clusterInfo } = useCluster();
     const searchParams = useSearchParams();
     const onChange = ({ pathname }: ValueType<any, false>, meta: ActionMeta<any>) => {
         if (meta.action === 'select-option') {
@@ -58,7 +61,7 @@ export function SearchBar() {
         setSearchOptions(options);
 
         // checking for non local search output
-        if (hasDomainSyntax(search)) {
+        if (cluster === Cluster.MainnetBeta && hasDomainSyntax(search)) {
             // if search input is a potential domain we continue the loading state
             domainSearch(options);
         } else {
@@ -72,9 +75,8 @@ export function SearchBar() {
     // appends domain lookup results to the local search state
     const domainSearch = async (options: SearchOptions[]) => {
         setLoadingSearchMessage('Looking up domain...');
-        const connection = new Connection(url);
         const searchTerm = search;
-        const updatedOptions = await buildDomainOptions(connection, search, options);
+        const updatedOptions = await buildDomainOptions(search, options);
         if (searchRef.current === searchTerm) {
             setSearchOptions(updatedOptions);
             // after attempting to fetch the domain name we can conclude the loading state
@@ -213,31 +215,74 @@ function buildTokenOptions(search: string, cluster: Cluster, tokenRegistry: Toke
     }
 }
 
-async function buildDomainOptions(connection: Connection, search: string, options: SearchOptions[]) {
-    const domainInfo = await getDomainInfo(search, connection);
+type BonfidaProxyResponse = {
+    s: "ok",
+    result: Base58EncodedAddress
+} | {
+    s: "error",
+    result: string
+};
+
+async function getDomainOwner(domain: string): Promise<Base58EncodedAddress | undefined> {
+    const proxyUrl = `https://sns-sdk-proxy.bonfida.workers.dev/resolve/${domain}`;
+    const response = await fetch(proxyUrl);
+    if (!response.ok) {
+        reportError(`Error requesting resolve for ${domain} from Bonfida proxy. HTTP Status ${response.status}`);
+        return undefined;
+    }
+    const proxyResponse = await response.json() as BonfidaProxyResponse;
+    if (proxyResponse.s === 'error') {
+        // don't report this error, just means domain doesn't exist
+        return undefined;
+    }
+    return proxyResponse.result;
+}
+
+async function getDomainAddress(domain: string): Promise<Base58EncodedAddress | undefined> {
+    const proxyUrl = `https://sns-sdk-proxy.bonfida.workers.dev/domain-key/${domain}`;
+    const response = await fetch(proxyUrl);
+    if (!response.ok) {
+        reportError(`Error requesting domain-key for ${domain} from Bonfida proxy. HTTP Status ${response.status}`);
+        return undefined;
+    }
+    const proxyResponse = await response.json() as BonfidaProxyResponse;
+    if (proxyResponse.s === 'error') {
+        // don't report this error, just means domain doesn't exist
+        return undefined;
+    }
+    return proxyResponse.result;
+}
+
+async function buildDomainOptions(search: string, options: SearchOptions[]) {
+    const [domainOwner, domainAddress] = await Promise.all([getDomainOwner(search), getDomainAddress(search)]);
     const updatedOptions: SearchOptions[] = [...options];
-    if (domainInfo && domainInfo.owner && domainInfo.address) {
+
+    if (domainOwner) {
         updatedOptions.push({
             label: 'Domain Owner',
             options: [
                 {
-                    label: domainInfo.owner,
-                    pathname: '/address/' + domainInfo.owner,
-                    value: [search],
-                },
-            ],
-        });
-        updatedOptions.push({
-            label: 'Name Service Account',
-            options: [
-                {
-                    label: search,
-                    pathname: '/address/' + domainInfo.address,
+                    label: domainOwner,
+                    pathname: '/address/' + domainOwner,
                     value: [search],
                 },
             ],
         });
     }
+
+    if (domainAddress) {
+        updatedOptions.push({
+            label: 'Name Service Account',
+            options: [
+                {
+                    label: search,
+                    pathname: '/address/' + domainAddress,
+                    value: [search],
+                },
+            ],
+        });
+    }
+
     return updatedOptions;
 }
 

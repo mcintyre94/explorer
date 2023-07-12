@@ -20,9 +20,6 @@ export interface DomainInfo {
     name: string;
     address: PublicKey;
 }
-export const hasDomainSyntax = (value: string) => {
-    return value.length > 4 && value.substring(value.length - 4) === '.sol';
-};
 
 async function getDomainKey(name: string, nameClass?: PublicKey, nameParent?: PublicKey) {
     const hashedDomainName = await getHashedName(name);
@@ -41,9 +38,9 @@ export async function getDomainInfo(domain: string, connection: Connection) {
         const registry = await getNameOwner(connection, domainKey);
         return registry && registry.registry.owner
             ? {
-                  address: domainKey.toString(),
-                  owner: registry.registry.owner.toString(),
-              }
+                address: domainKey.toString(),
+                owner: registry.registry.owner.toString(),
+            }
             : null;
     } catch {
         return null;
